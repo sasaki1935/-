@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>シンプルBBS - GitHub Pagesサンプル</title>
+  <style>
+    body { font-family: sans-serif; background: #f1f5f9; padding: 30px;}
+    .bbs-container { max-width: 480px; margin: auto; background: #fff; border-radius: 12px; box-shadow: 0 6px 20px #0001; padding: 24px;}
+    h1 { font-size: 1.4em; color: #2563eb; margin-bottom: 1em;}
+    form { display: flex; gap: 8px; margin-bottom: 1em; }
+    input, textarea { flex: 1; padding: 8px; border-radius: 6px; border: 1px solid #ddd;}
+    button { background: #2563eb; color: #fff; border: none; border-radius: 6px; padding: 8px 18px; cursor: pointer;}
+    .msg { margin: 1em 0; background: #f8fafc; border-left: 4px solid #60a5fa; padding: 8px 12px; border-radius: 4px;}
+    .msg .name { font-weight: bold; color: #2563eb;}
+    .msg .date { font-size: 0.8em; color: #64748b; margin-left: 1em;}
+  </style>
+</head>
+<body>
+  <div class="bbs-container">
+    <h1>📋 シンプルBBS（GitHub Pages対応）</h1>
+    <form id="bbsForm">
+      <input type="text" id="name" placeholder="名前" required maxlength="16">
+      <input type="text" id="comment" placeholder="コメント" required maxlength="60">
+      <button type="submit">投稿</button>
+    </form>
+    <div id="bbs"></div>
+    <small style="color:#999;">※投稿はこのブラウザだけに保存されます（ローカルストレージ利用）。<br>
+    本格的なBBS（サーバー保存型）は無料のレンタル掲示板サービス等をご利用ください。</small>
+  </div>
+  <script>
+    const $bbs = document.getElementById('bbs');
+    const bbsKey = 'bbs_posts_v1';
+
+    function load() {
+      const posts = JSON.parse(localStorage.getItem(bbsKey) || '[]');
+      $bbs.innerHTML = posts.reverse().map(post =>
+        `<div class="msg"><span class="name">${post.name}</span><span class="date">${post.date}</span><br>${post.comment}</div>`
+      ).join('');
+    }
+    load();
+
+    document.getElementById('bbsForm').onsubmit = e => {
+      e.preventDefault();
+      const name = document.getElementById('name').value.trim() || '名無しさん';
+      const comment = document.getElementById('comment').value.trim();
+      if (!comment) return;
+      const date = new Date().toLocaleString('ja-JP');
+      const posts = JSON.parse(localStorage.getItem(bbsKey) || '[]');
+      posts.push({ name, comment, date });
+      localStorage.setItem(bbsKey, JSON.stringify(posts));
+      document.getElementById('comment').value = '';
+      load();
+    };
+  </script>
+</body>
+</html>
