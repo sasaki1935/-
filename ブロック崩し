@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>ブロック崩しゲーム</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+        }
+        
+        body {
+            margin: 0;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Arial', sans-serif;
+            overflow: hidden;
+        }
+        
+        .game-container {
+            text-align: center;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            width: 100%;
+            max-width: 500px;
+        }
+        
+        canvas {
+            border: 3px solid #fff;
+            border-radius: 10px;
+            background: linear-gradient(45deg, #1a1a2e, #16213e);
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            width: 100%;
+            height: auto;
+            display: block;
+            touch-action: none;
+        }
+        
+        .score {
+            color: white;
+            font-size: clamp(16px, 4vw, 24px);
+            font-weight: bold;
+            margin: 10px 0;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.7);
+        }
+        
+        .controls {
+            color: white;
+            margin-top: 10px;
+            font-size: clamp(12px, 3vw, 14px);
+            opacity: 0.8;
+            line-height: 1.4;
+        }
+        
+        .mobile-controls {
+            display: none;
+            justify-content: space-between;
+            margin-top: 15px;
+            gap: 10px;
+        }
+        
+        .control-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 10px;
+            color: white;
+            font-size: clamp(14px, 4vw, 18px);
+            font-weight: bold;
+            padding: 15px 20px;
+            cursor: pointer;
+            transition: all 0.2s;
+            user-select: none;
+            touch-action: manipulation;
+            flex: 1;
+        }
+        
+        .control-btn:active {
+            background: rgba(255, 255, 255, 0.4);
+            transform: scale(0.95);
+        }
+        
+        .start-btn {
+            background: rgba(76, 175, 80, 0.8);
+            border: 2px solid rgba(76, 175, 80, 1);
+        }
+        
+        .start-btn:active {
+            background: rgba(76, 175, 80, 1);
+        }
+        
+        .game-over {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: clamp(24px, 6vw, 32px);
+            font-weight: bold;
+            text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.8);
+            display: none;
+            text-align: center;
+            z-index: 10;
+        }
+        
+        @media (max-width: 768px) {
+            .mobile-controls {
+                display: flex;
+            }
+            .controls {
+                display: none;
+            }
+            body {
+                padding: 5px;
+            }
+            .game-container {
+                padding: 10px;
+            }
+        }
+        
+        @media (orientation: landscape) and (max-height: 500px) {
+            .score {
+                font-size: 16px;
+                margin: 5px 0;
+            }
+            .game-container {
+                padding: 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div class="score">スコア: <span id="score">0</span> | ライフ: <span id="lives">3</span></div>
+        <canvas id="gameCanvas"></canvas>
+        <div class="controls">
+            マウス移動またはA/Dキーでパドルを操作 | スペースキーでスタート/リスタート
+        </div>
+        <div class="mobile-controls">
+            <button class="control-btn" id="leftBtn">◀ 左</button>
+            <button class="control-btn start-btn" id="startBtn">スタート</button>
+            <button class="control-btn" id="rightBtn">右 ▶</button>
+        </div>
+        <div class="game-over" id="gameOver">
+            <div id="gameOverText">ゲームオーバー!</div>
+            <div style="font-size: 60%; margin-top: 10px;">タップでリスタート</div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
+        const livesElement = document.getElementById('lives');
+        const gameOverElement = document.getElementById('gameOver');
+        const gameOverText = document.getElementById('gameOverText');
+        
+        // モバイルコントロール
+        const leftBtn = document.getElementById('leftBtn');
+        const rightBtn = document.getElementById('rightBtn');
+        const startBtn = document.getElementById('startBtn');
+
+        // デバイス判定
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+        // キャンバスサイズ設定
+        function resizeCanvas() {
+            const container = document.querySelector('.game-container');
+            const maxWidth = Math.min(500, window.innerWidth - 40);
+            const aspectRatio = 4/3;
+            
+            canvas.width = maxWidth;
+            canvas.height = maxWidth / aspectRatio;
+            
+            // ゲーム要素のスケール調整
+            scaleGame();
+        }
+
+        // ゲーム要素スケール調整
+        function scaleGame() {
+            const scale = canvas.width / 500; // 基準サイズ500px
+            
+            // パドル
+            paddle.width = 120 * scale;
+            paddle.height = 12 * scale;
+            paddle.speed = 6 * scale;
+            paddle.x = canvas.width / 2 - paddle.width / 2;
+            paddle.y = canvas.height - 25 * scale;
+            
+            // ボール
+            ball.radius = 6 * scale;
+            ball.speed = 4 * scale;
+            
+            // ブロック
+            blockWidth = Math.floor((canvas.width - 40 * scale) / 8);
+            blockHeight = 15 * scale;
+            blockPadding = 3 * scale;
+            blockOffsetTop = 40 * scale;
+            blockOffsetLeft = (canvas.width - (blockWidth + blockPadding) * 8 + blockPadding) / 2;
+        }
+
+        // ゲーム状態
+        let gameState = 'waiting';
+        let score = 0;
+        let lives = 3;
+
+        // パドル
+        const paddle = {
+            x: 0,
+            y: 0,
+            width: 120,
+            height: 12,
+            speed: 6
+        };
+
+        // ボール
+        const ball = {
+            x: 0,
+            y: 0,
+            radius: 6,
+            dx: 4,
+            dy: -4,
+            speed: 4
+        };
+
+        // ブロック設定
+        let blocks = [];
+        const blockRows = 6;
+        const blockCols = 8;
+        let blockWidth = 60;
+        let blockHeight = 15;
+        let blockPadding = 3;
+        let blockOffsetTop = 40;
+        let blockOffsetLeft = 20;
+
+        // ブロックの色配列
+        const blockColors = [
+            '#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', 
+            '#ffd93d', '#ff9ff3'
+        ];
+
+        // パーティクル配列
+        let particles = [];
+
+        // タッチ関連
+        let touchX = 0;
+        let touchStartX = 0;
+
+        // ブロック初期化
+        function initBlocks() {
+            blocks.length = 0;
+            for (let r = 0; r < blockRows; r++) {
+                for (let c = 0; c < blockCols; c++) {
+                    blocks.push({
+                        x: c * (blockWidth + blockPadding) + blockOffsetLeft,
+                        y: r * (blockHeight + blockPadding) + blockOffsetTop,
+                        width: blockWidth,
+                        height: blockHeight,
+                        color: blockColors[r % blockColors.length],
+                        visible: true
+                    });
+                }
+            }
+        }
+
+        // パーティクル作成
+        function createParticles(x, y, color) {
+            const particleCount = isMobile ? 4 : 8;
+            for (let i = 0; i < particleCount; i++) {
+                particles.push({
+                    x: x,
+                    y: y,
+                    dx: (Math.random() - 0.5) * 6,
+                    dy: (Math.random() - 0.5) * 6,
+                    life: 1.0,
+                    decay: 0.02,
+                    color: color
+                });
+            }
+        }
+
+        // ゲーム初期化
+        function initGame() {
+            score = 0;
+            lives = 3;
+            gameState = 'waiting';
+            ball.x = canvas.width / 2;
+            ball.y = canvas.height / 2;
+            ball.dx = ball.speed * (Math.random() > 0.5 ? 1 : -1);
+            ball.dy = -ball.speed;
+            paddle.x = canvas.width / 2 - paddle.width / 2;
+            initBlocks();
+            particles = [];
+            gameOverElement.style.display = 'none';
+            updateUI();
+            updateStartButton();
+        }
+
+        // UI更新
+        function updateUI() {
+            scoreElement.textContent = score;
+            livesElement.textContent = lives;
+        }
+
+        // スタートボタン更新
+        function updateStartButton() {
+            if (gameState === 'waiting') {
+                startBtn.textContent = 'スタート';
+                startBtn.style.background = 'rgba(76, 175, 80, 0.8)';
+            } else if (gameState === 'gameOver') {
+                startBtn.textContent = 'リスタート';
+                startBtn.style.background = 'rgba(255, 193, 7, 0.8)';
+            } else {
+                startBtn.textContent = 'プレイ中';
+                startBtn.style.background = 'rgba(158, 158, 158, 0.5)';
+            }
+        }
+
+        // 衝突検出
+        function collision(rect1, rect2) {
+            return rect1.x < rect2.x + rect2.width &&
+                   rect1.x + rect1.width > rect2.x &&
+                   rect1.y < rect2.y + rect2.height &&
+                   rect1.y + rect1.height > rect2.y;
+        }
+
+        // ボールとパドルの詳細衝突判定
+        function ballPaddleCollision() {
+            const nextX = ball.x + ball.dx;
+            const nextY = ball.y + ball.dy;
+            
+            const ballLeft = nextX - ball.radius;
+            const ballRight = nextX + ball.radius;
+            const ballTop = nextY - ball.radius;
+            const ballBottom = nextY + ball.radius;
+            
+            const paddleLeft = paddle.x;
+            const paddleRight = paddle.x + paddle.width;
+            const paddleTop = paddle.y;
+            const paddleBottom = paddle.y + paddle.height;
+            
+            if (ballRight >= paddleLeft && ballLeft <= paddleRight && 
+                ballBottom >= paddleTop && ballTop <= paddleBottom) {
+                
+                if (ball.y < paddleTop && ball.dy > 0) {
+                    ball.y = paddleTop - ball.radius;
+                    
+                    const hitPos = (ball.x - paddle.x) / paddle.width;
+                    const angle = (hitPos - 0.5) * Math.PI / 3;
+                    const speed = Math.sqrt(ball.dx * ball.dx + ball.dy * ball.dy);
+                    
+                    ball.dx = speed * Math.sin(angle);
+                    ball.dy = -Math.abs(speed * Math.cos(angle));
+                    
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // ボール移動
+        function moveBall() {
+            if (gameState !== 'playing') return;
+
+            ball.x += ball.dx;
+            ball.y += ball.dy;
+
+            // 左右の壁との衝突
+            if (ball.x - ball.radius < 0) {
+                ball.x = ball.radius;
+                ball.dx = Math.abs(ball.dx);
+            }
+            if (ball.x + ball.radius > canvas.width) {
+                ball.x = canvas.width - ball.radius;
+                ball.dx = -Math.abs(ball.dx);
+            }
+            
+            // 上の壁との衝突
+            if (ball.y - ball.radius < 0) {
+                ball.y = ball.radius;
+                ball.dy = Math.abs(ball.dy);
+            }
+
+            // パドルとの衝突
+            ballPaddleCollision();
+
+            // ブロックとの衝突
+            for (let block of blocks) {
+                if (block.visible && collision({
+                    x: ball.x - ball.radius,
+                    y: ball.y - ball.radius,
+                    width: ball.radius * 2,
+                    height: ball.radius * 2
+                }, block)) {
+                    block.visible = false;
+                    ball.dy = -ball.dy;
+                    score += 10;
+                    createParticles(block.x + block.width/2, block.y + block.height/2, block.color);
+                    break;
+                }
+            }
+
+            // ボールが下に落ちた場合
+            if (ball.y + ball.radius > canvas.height) {
+                lives--;
+                if (lives <= 0) {
+                    gameState = 'gameOver';
+                    gameOverText.textContent = 'ゲームオーバー!';
+                    gameOverElement.style.display = 'block';
+                } else {
+                    ball.x = canvas.width / 2;
+                    ball.y = canvas.height / 2;
+                    ball.dx = ball.speed * (Math.random() > 0.5 ? 1 : -1);
+                    ball.dy = -ball.speed;
+                    gameState = 'waiting';
+                }
+                updateStartButton();
+            }
+
+            // 全ブロック破壊チェック
+            if (blocks.every(block => !block.visible)) {
+                gameState = 'gameOver';
+                gameOverText.textContent = 'クリア！';
+                gameOverElement.style.display = 'block';
+                updateStartButton();
+            }
+
+            updateUI();
+        }
+
+        // パドル移動
+        function movePaddle() {
+            if (keys.left && paddle.x > 0) {
+                paddle.x -= paddle.speed;
+            }
+            if (keys.right && paddle.x < canvas.width - paddle.width) {
+                paddle.x += paddle.speed;
+            }
+        }
+
+        // パーティクル更新
+        function updateParticles() {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                let p = particles[i];
+                p.x += p.dx;
+                p.y += p.dy;
+                p.life -= p.decay;
+                
+                if (p.life <= 0) {
+                    particles.splice(i, 1);
+                }
+            }
+        }
+
+        // 描画
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // パドル描画
+            const gradient = ctx.createLinearGradient(paddle.x, paddle.y, paddle.x, paddle.y + paddle.height);
+            gradient.addColorStop(0, '#fff');
+            gradient.addColorStop(1, '#ccc');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(paddle.x, paddle.y, paddle.width, paddle.height);
+            ctx.strokeStyle = '#999';
+            ctx.strokeRect(paddle.x, paddle.y, paddle.width, paddle.height);
+
+            // ボール描画
+            const ballGradient = ctx.createRadialGradient(ball.x - 2, ball.y - 2, 0, ball.x, ball.y, ball.radius);
+            ballGradient.addColorStop(0, '#fff');
+            ballGradient.addColorStop(1, '#ff6b6b');
+            ctx.fillStyle = ballGradient;
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+            ctx.fill();
+
+            // ブロック描画
+            for (let block of blocks) {
+                if (block.visible) {
+                    const blockGradient = ctx.createLinearGradient(block.x, block.y, block.x, block.y + block.height);
+                    blockGradient.addColorStop(0, block.color);
+                    blockGradient.addColorStop(1, '#000');
+                    ctx.fillStyle = blockGradient;
+                    ctx.fillRect(block.x, block.y, block.width, block.height);
+                    ctx.strokeStyle = '#333';
+                    ctx.strokeRect(block.x, block.y, block.width, block.height);
+                }
+            }
+
+            // パーティクル描画
+            for (let p of particles) {
+                ctx.globalAlpha = p.life;
+                ctx.fillStyle = p.color;
+                ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
+            }
+            ctx.globalAlpha = 1;
+
+            // 待機状態のメッセージ
+            if (gameState === 'waiting') {
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+                ctx.font = `${Math.max(16, canvas.width / 25)}px Arial`;
+                ctx.textAlign = 'center';
+                const message = isMobile ? 'スタートボタンをタップ' : 'スペースキーでスタート';
+                ctx.fillText(message, canvas.width / 2, canvas.height / 2 + 30);
+            }
+        }
+
+        // キー管理
+        const keys = {
+            left: false,
+            right: false
+        };
+
+        // ゲーム開始/リスタート
+        function startGame() {
+            if (gameState === 'waiting') {
+                gameState = 'playing';
+            } else if (gameState === 'gameOver') {
+                initGame();
+            }
+            updateStartButton();
+        }
+
+        // イベントリスナー - キーボード
+        document.addEventListener('keydown', (e) => {
+            switch(e.code) {
+                case 'KeyA':
+                case 'ArrowLeft':
+                    keys.left = true;
+                    break;
+                case 'KeyD':
+                case 'ArrowRight':
+                    keys.right = true;
+                    break;
+                case 'Space':
+                    e.preventDefault();
+                    startGame();
+                    break;
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            switch(e.code) {
+                case 'KeyA':
+                case 'ArrowLeft':
+                    keys.left = false;
+                    break;
+                case 'KeyD':
+                case 'ArrowRight':
+                    keys.right = false;
+                    break;
+            }
+        });
+
+        // マウス操作
+        canvas.addEventListener('mousemove', (e) => {
+            if (isMobile) return;
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            paddle.x = mouseX - paddle.width / 2;
+            
+            if (paddle.x < 0) paddle.x = 0;
+            if (paddle.x > canvas.width - paddle.width) {
+                paddle.x = canvas.width - paddle.width;
+            }
+        });
+
+        // タッチ操作
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const rect = canvas.getBoundingClientRect();
+            touchStartX = touch.clientX - rect.left;
+            touchX = touchStartX;
+        });
+
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const rect = canvas.getBoundingClientRect();
+            touchX = touch.clientX - rect.left;
+            
+            paddle.x = touchX - paddle.width / 2;
+            if (paddle.x < 0) paddle.x = 0;
+            if (paddle.x > canvas.width - paddle.width) {
+                paddle.x = canvas.width - paddle.width;
+            }
+        });
+
+        canvas.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            // シングルタップでゲーム開始
+            if (Math.abs(touchX - touchStartX) < 10 && (gameState === 'waiting' || gameState === 'gameOver')) {
+                startGame();
+            }
+        });
+
+        // モバイルボタン操作
+        leftBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            keys.left = true;
+        });
+
+        leftBtn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            keys.left = false;
+        });
+
+        rightBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            keys.right = true;
+        });
+
+        rightBtn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            keys.right = false;
+        });
+
+        startBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            startGame();
+        });
+
+        // リサイズ対応
+        window.addEventListener('resize', () => {
+            resizeCanvas();
+        });
+
+        // ゲームループ
+        function gameLoop() {
+            movePaddle();
+            moveBall();
+            updateParticles();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // 初期化
+        resizeCanvas();
+        initGame();
+        gameLoop();
+    </script>
+</body>
+</html>
