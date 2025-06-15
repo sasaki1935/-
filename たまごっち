@@ -1,0 +1,278 @@
+import React, { useState, useEffect } from 'react';
+import { Heart, Utensils, Gamepad2, Bath, Bed, Clock } from 'lucide-react';
+
+const Tamagotchi = () => {
+  const [pet, setPet] = useState({
+    name: 'たまちゃん',
+    age: 0,
+    hunger: 80,
+    happiness: 80,
+    cleanliness: 80,
+    energy: 80,
+    health: 100,
+    stage: 'baby', // baby, child, teen, adult
+    mood: 'happy',
+    lastFed: Date.now(),
+    lastPlayed: Date.now(),
+    lastCleaned: Date.now(),
+    lastSlept: Date.now()
+  });
+
+  const [message, setMessage] = useState('こんにちは！よろしくお願いします！');
+  const [showNameInput, setShowNameInput] = useState(false);
+  const [newName, setNewName] = useState('');
+
+  // ペットの状態を時間経過で減少させる
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setPet(prev => {
+        const now = Date.now();
+        const timePassed = now - prev.lastFed;
+        
+        let newPet = { ...prev };
+        
+        // 時間経過による状態変化（1分 = 1時間として計算）
+        const hoursPassedSinceFed = Math.floor(timePassed / (60 * 1000));
+        const hoursPassedSincePlayed = Math.floor((now - prev.lastPlayed) / (60 * 1000));
+        const hoursPassedSinceCleaned = Math.floor((now - prev.lastCleaned) / (60 * 1000));
+        const hoursPassedSinceSlept = Math.floor((now - prev.lastSlept) / (60 * 1000));
+        
+        // 状態値の減少
+        newPet.hunger = Math.max(0, prev.hunger - hoursPassedSinceFed * 2);
+        newPet.happiness = Math.max(0, prev.happiness - hoursPassedSincePlayed * 1.5);
+        newPet.cleanliness = Math.max(0, prev.cleanliness - hoursPassedSinceCleaned);
+        newPet.energy = Math.max(0, prev.energy - hoursPassedSinceSlept * 1.2);
+        
+        // 健康状態の計算
+        const avgStats = (newPet.hunger + newPet.happiness + newPet.cleanliness + newPet.energy) / 4;
+        newPet.health = Math.max(0, Math.min(100, avgStats));
+        
+        // 年齢の増加（10分で1歳）
+        const ageIncrease = Math.floor(timePassed / (10 * 60 * 1000));
+        if (ageIncrease > prev.age) {
+          newPet.age = ageIncrease;
+          
+          // 成長段階の変更
+          if (newPet.age >= 15) newPet.stage = 'adult';
+          else if (newPet.age >= 10) newPet.stage = 'teen';
+          else if (newPet.age >= 5) newPet.stage = 'child';
+        }
+        
+        // 気分の決定
+        if (newPet.health < 30) newPet.mood = 'sick';
+        else if (newPet.hunger < 30 || newPet.happiness < 30) newPet.mood = 'sad';
+        else if (newPet.energy < 30) newPet.mood = 'tired';
+        else if (newPet.cleanliness < 30) newPet.mood = 'dirty';
+        else newPet.mood = 'happy';
+        
+        return newPet;
+      });
+    }, 5000); // 5秒ごとに更新
+
+    return () => clearInterval(interval);
+  }, []);
+
+  const feed = () => {
+    setPet(prev => ({
+      ...prev,
+      hunger: Math.min(100, prev.hunger + 20),
+      lastFed: Date.now()
+    }));
+    setMessage('おいしい！ありがとう！');
+  };
+
+  const play = () => {
+    setPet(prev => ({
+      ...prev,
+      happiness: Math.min(100, prev.happiness + 25),
+      energy: Math.max(0, prev.energy - 10),
+      lastPlayed: Date.now()
+    }));
+    setMessage('楽しい！もっと遊ぼう！');
+  };
+
+  const clean = () => {
+    setPet(prev => ({
+      ...prev,
+      cleanliness: Math.min(100, prev.cleanliness + 30),
+      happiness: Math.min(100, prev.happiness + 5),
+      lastCleaned: Date.now()
+    }));
+    setMessage('きれいになった！気持ちいい！');
+  };
+
+  const sleep = () => {
+    setPet(prev => ({
+      ...prev,
+      energy: Math.min(100, prev.energy + 40),
+      lastSlept: Date.now()
+    }));
+    setMessage('ぐっすり眠れた！元気になったよ！');
+  };
+
+  const changeName = () => {
+    if (newName.trim()) {
+      setPet(prev => ({ ...prev, name: newName.trim() }));
+      setMessage(`よろしくお願いします！僕の名前は${newName.trim()}です！`);
+      setNewName('');
+      setShowNameInput(false);
+    }
+  };
+
+  const getPetEmoji = () => {
+    const stageEmojis = {
+      baby: '🥚',
+      child: '🐣',
+      teen: '🐤',
+      adult: '🐦'
+    };
+    
+    if (pet.mood === 'sick') return '😷';
+    if (pet.mood === 'sad') return '😢';
+    if (pet.mood === 'tired') return '😴';
+    if (pet.mood === 'dirty') return '🤢';
+    
+    return stageEmojis[pet.stage] || '🥚';
+  };
+
+  const getStatusColor = (value) => {
+    if (value >= 70) return 'bg-green-500';
+    if (value >= 40) return 'bg-yellow-500';
+    return 'bg-red-500';
+  };
+
+  const getHealthStatus = () => {
+    if (pet.health >= 80) return { text: '元気', color: 'text-green-600' };
+    if (pet.health >= 60) return { text: '普通', color: 'text-yellow-600' };
+    if (pet.health >= 40) return { text: '注意', color: 'text-orange-600' };
+    return { text: '危険', color: 'text-red-600' };
+  };
+
+  const healthStatus = getHealthStatus();
+
+  return (
+    <div className="max-w-md mx-auto bg-gradient-to-b from-pink-100 to-blue-100 rounded-3xl p-6 shadow-2xl border-4 border-purple-300">
+      {/* ヘッダー */}
+      <div className="text-center mb-4">
+        <h1 className="text-2xl font-bold text-purple-800 mb-2">🎮 たまごっち 🎮</h1>
+        <div className="bg-black text-green-400 p-2 rounded-lg font-mono text-sm">
+          <Clock className="inline w-4 h-4 mr-1" />
+          {new Date().toLocaleTimeString('ja-JP')}
+        </div>
+      </div>
+
+      {/* ペット表示エリア */}
+      <div className="bg-white rounded-2xl p-6 mb-4 border-2 border-gray-300 text-center">
+        <div className="text-6xl mb-2">{getPetEmoji()}</div>
+        <h2 className="text-xl font-bold text-gray-800 mb-1">{pet.name}</h2>
+        <p className="text-sm text-gray-600 mb-2">{pet.age}歳 ({pet.stage === 'baby' ? 'たまご' : pet.stage === 'child' ? '子供' : pet.stage === 'teen' ? '学生' : '大人'})</p>
+        <p className={`font-semibold ${healthStatus.color}`}>健康状態: {healthStatus.text}</p>
+      </div>
+
+      {/* メッセージエリア */}
+      <div className="bg-yellow-100 border-2 border-yellow-300 rounded-lg p-3 mb-4">
+        <p className="text-sm text-center text-gray-800">💭 {message}</p>
+      </div>
+
+      {/* ステータスバー */}
+      <div className="grid grid-cols-2 gap-2 mb-4">
+        {[
+          { label: 'おなか', value: pet.hunger, icon: '🍎' },
+          { label: 'きぶん', value: pet.happiness, icon: '😊' },
+          { label: 'きれい', value: pet.cleanliness, icon: '✨' },
+          { label: 'げんき', value: pet.energy, icon: '💪' }
+        ].map((stat, index) => (
+          <div key={index} className="bg-white p-2 rounded-lg border">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs font-medium">{stat.icon} {stat.label}</span>
+              <span className="text-xs">{stat.value}%</span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2">
+              <div 
+                className={`h-2 rounded-full transition-all duration-300 ${getStatusColor(stat.value)}`}
+                style={{ width: `${stat.value}%` }}
+              ></div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* 操作ボタン */}
+      <div className="grid grid-cols-2 gap-2 mb-4">
+        <button 
+          onClick={feed}
+          className="bg-orange-500 hover:bg-orange-600 text-white p-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-1"
+        >
+          <Utensils className="w-4 h-4" />
+          ごはん
+        </button>
+        <button 
+          onClick={play}
+          className="bg-green-500 hover:bg-green-600 text-white p-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-1"
+        >
+          <Gamepad2 className="w-4 h-4" />
+          あそぶ
+        </button>
+        <button 
+          onClick={clean}
+          className="bg-blue-500 hover:bg-blue-600 text-white p-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-1"
+        >
+          <Bath className="w-4 h-4" />
+          きれいに
+        </button>
+        <button 
+          onClick={sleep}
+          className="bg-purple-500 hover:bg-purple-600 text-white p-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-1"
+        >
+          <Bed className="w-4 h-4" />
+          ねんね
+        </button>
+      </div>
+
+      {/* 名前変更 */}
+      <div className="text-center">
+        {!showNameInput ? (
+          <button 
+            onClick={() => setShowNameInput(true)}
+            className="bg-pink-500 hover:bg-pink-600 text-white px-4 py-2 rounded-lg text-sm transition-colors"
+          >
+            なまえを変える
+          </button>
+        ) : (
+          <div className="flex gap-2">
+            <input 
+              type="text"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder="新しい名前"
+              className="flex-1 px-3 py-2 border rounded-lg text-sm"
+              maxLength={10}
+            />
+            <button 
+              onClick={changeName}
+              className="bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded-lg text-sm transition-colors"
+            >
+              OK
+            </button>
+            <button 
+              onClick={() => setShowNameInput(false)}
+              className="bg-gray-500 hover:bg-gray-600 text-white px-3 py-2 rounded-lg text-sm transition-colors"
+            >
+              やめる
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* 遊び方 */}
+      <div className="mt-4 text-xs text-gray-600 bg-white p-3 rounded-lg border">
+        <p className="font-bold mb-1">🎯 遊び方:</p>
+        <p>• ペットの状態を確認して、必要なお世話をしてあげよう！</p>
+        <p>• 時間が経つと、おなかがすいたり、きぶんが悪くなったりするよ</p>
+        <p>• 健康状態を良好に保って、ペットを大切に育ててね！</p>
+      </div>
+    </div>
+  );
+};
+
+export default Tamagotchi;
